@@ -1,10 +1,7 @@
 # main.py
-import os
-import sys
-import subprocess
-import pathlib
-
-APP_PATH = str(pathlib.Path(__file__).resolve())
+# import pathlib
+#
+# APP_PATH = str(pathlib.Path(__file__).resolve())
 
 # 1) 런처: 직접 실행이면 streamlit run으로 재실행 후 종료
 # if __name__ == "__main__" and os.getenv("RUNNING_IN_STREAMLIT") != "1":
