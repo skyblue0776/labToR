@@ -1,3 +1,23 @@
+# main.py
+import os
+import sys
+import subprocess
+import pathlib
+
+APP_PATH = str(pathlib.Path(__file__).resolve())
+
+# 1) 런처: 직접 실행이면 streamlit run으로 재실행 후 종료
+# if __name__ == "__main__" and os.getenv("RUNNING_IN_STREAMLIT") != "1":
+#     env = os.environ.copy()
+#     env["RUNNING_IN_STREAMLIT"] = "1"  # 스트림릿 실행 컨텍스트 표시
+#     # 필요하면 --server.headless true 등 옵션 추가 가능
+#     subprocess.run([
+#         sys.executable, "-m", "streamlit", "run", APP_PATH,
+#         "--server.port", "8501",            # 여기만 바꾸면 끝
+#     ], env=env)
+#     sys.exit(0)
+
+# 2) 여기부터가 실제 Streamlit 앱 코드 (streamlit import는 런처 분기 뒤!)
 import json
 import numpy as np
 import pandas as pd
@@ -10,13 +30,14 @@ st.set_page_config(page_title="Reflectance Generator", page_icon="🎨", layout=
 st.title("Reflectance Generator")
 
 WAVELENGTHS_31 = list(range(400, 701, 10))  # 400~700nm, 10nm 간격 → 31개
-WAVELENGTHS_ALL = list(range(360, 781, 10)) # 360~780nm, 10nm 간격 → 43개
+WAVELENGTHS_ALL = list(range(360, 781, 10))  # 360~780nm, 10nm 간격 → 43개
 
 st.caption(
     "1. L*, a*, b* 입력\n"
     "2. 반사율 만들기\n"
     "3. 클립보드로 복사"
 )
+
 
 # ---------------------- 데이터 로드 ----------------------
 @st.cache_data(show_spinner=False)
@@ -35,13 +56,14 @@ def load_xyz(path: str = "xyz.csv") -> pd.DataFrame:
             raise ValueError("xyz.csv 행 개수가 31보다 적습니다. 400~700nm 31행이 필요합니다.")
         df = df.iloc[:31].reset_index(drop=True)
 
-    needed = ["Wx(D65-10)","Wy(D65-10)","Wz(D65-10)",
-              "Wx(F02)","Wy(F02)","Wz(F02)",
-              "Wx(A-10)","Wy(A-10)","Wz(A-10)"]
+    needed = ["Wx(D65-10)", "Wy(D65-10)", "Wz(D65-10)",
+              "Wx(F02)", "Wy(F02)", "Wz(F02)",
+              "Wx(A-10)", "Wy(A-10)", "Wz(A-10)"]
     miss = [c for c in needed if c not in df.columns]
     if miss:
         raise ValueError(f"xyz.csv에 다음 컬럼이 없습니다: {miss}")
     return df
+
 
 try:
     XYZ = load_xyz("xyz.csv")
@@ -49,20 +71,23 @@ except Exception as e:
     st.error(f"xyz.csv 로드 실패: {e}")
     st.stop()
 
+
 # ---------------------- Lab 변환 유틸 ----------------------
 def _f_piecewise(t):
-    t1 = (6/29) ** 3
-    t2 = (29/6) ** 2 / 3
-    return np.where(t > t1, np.cbrt(t), t2 * t + 16/116)
+    t1 = (6 / 29) ** 3
+    t2 = (29 / 6) ** 2 / 3
+    return np.where(t > t1, np.cbrt(t), t2 * t + 16 / 116)
+
 
 def xyz_to_lab(x, y, z, white_xyz):
     Xn, Yn, Zn = white_xyz
     Xr, Yr, Zr = x / Xn, y / Yn, z / Zn
     fx, fy, fz = _f_piecewise(Xr), _f_piecewise(Yr), _f_piecewise(Zr)
-    L = 116*fy - 16
-    a = 500*(fx - fy)
-    b = 200*(fy - fz)
+    L = 116 * fy - 16
+    a = 500 * (fx - fy)
+    b = 200 * (fy - fz)
     return L, a, b
+
 
 def reflectance_to_lab(reflectance_01: pd.DataFrame, XYZ: pd.DataFrame) -> pd.DataFrame:
     """
@@ -86,20 +111,27 @@ def reflectance_to_lab(reflectance_01: pd.DataFrame, XYZ: pd.DataFrame) -> pd.Da
     n_cols = reflectance_01.shape[1]
     out = pd.DataFrame(
         np.ones((9, n_cols)),
-        index=["L*(D65)","a*(D65)","b*(D65)","L*(F02)","a*(F02)","b*(F02)","L*(A)","a*(A)","b*(A)"],
+        index=["L*(D65)", "a*(D65)", "b*(D65)", "L*(F02)", "a*(F02)", "b*(F02)", "L*(A)", "a*(A)", "b*(A)"],
         columns=reflectance_01.columns,
     )
 
     for i in range(n_cols):
         r = reflectance_01.iloc[:, i].values  # 31,
-        Xd = np.sum(r * wx_d65); Yd = np.sum(r * wy_d65); Zd = np.sum(r * wz_d65)
-        Xf = np.sum(r * wx_f02); Yf = np.sum(r * wy_f02); Zf = np.sum(r * wz_f02)
-        Xa = np.sum(r * wx_a10); Ya = np.sum(r * wy_a10); Za = np.sum(r * wz_a10)
+        Xd = np.sum(r * wx_d65);
+        Yd = np.sum(r * wy_d65);
+        Zd = np.sum(r * wz_d65)
+        Xf = np.sum(r * wx_f02);
+        Yf = np.sum(r * wy_f02);
+        Zf = np.sum(r * wz_f02)
+        Xa = np.sum(r * wx_a10);
+        Ya = np.sum(r * wy_a10);
+        Za = np.sum(r * wz_a10)
         Ld, ad, bd = xyz_to_lab(Xd, Yd, Zd, white_d65)
         Lf, af, bf = xyz_to_lab(Xf, Yf, Zf, white_f02)
         La, aa, ba = xyz_to_lab(Xa, Ya, Za, white_a10)
         out.iloc[:, i] = [Ld, ad, bd, Lf, af, bf, La, aa, ba]
     return out
+
 
 # ---------------------- 최적화 ----------------------
 def solve_reflectance_for_lab(L_target: float, a_target: float, b_target: float, XYZ: pd.DataFrame):
@@ -111,14 +143,15 @@ def solve_reflectance_for_lab(L_target: float, a_target: float, b_target: float,
     bounds = [(0.0, 1.0)] * 31
 
     def objective(x):
-        df_r = pd.DataFrame(x, columns=["r"])   # (31 x 1)
-        lab = reflectance_to_lab(df_r, XYZ).T   # (1 x 9)
+        df_r = pd.DataFrame(x, columns=["r"])  # (31 x 1)
+        lab = reflectance_to_lab(df_r, XYZ).T  # (1 x 9)
         Ld, ad, bd = lab.iloc[0, 0], lab.iloc[0, 1], lab.iloc[0, 2]
-        return (Ld - L_target)**2 + (ad - a_target)**2 + (bd - b_target)**2
+        return (Ld - L_target) ** 2 + (ad - a_target) ** 2 + (bd - b_target) ** 2
 
     res = minimize(objective, x0=x0, method="SLSQP", bounds=bounds,
                    options={"maxiter": 500, "ftol": 1e-8, "disp": False})
     return res, np.clip(res.x, 0.0, 1.0)
+
 
 # ---------------------- 클립보드 복사 ----------------------
 def copy_text_to_clipboard(text: str, ok_msg: str, fail_msg: str):
@@ -149,6 +182,7 @@ def copy_text_to_clipboard(text: str, ok_msg: str, fail_msg: str):
         """,
         height=0
     )
+
 
 # ---------------------- DataFrame 구성 ----------------------
 def build_full_dataframe(reflectance_400_700_percent):
@@ -185,6 +219,7 @@ def build_full_dataframe(reflectance_400_700_percent):
             data[col] = [float(DEFAULT_VALS[i])]
 
     return pd.DataFrame(data)
+
 
 # ---------------------- UI ----------------------
 st.subheader("입력값")
